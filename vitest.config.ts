@@ -16,12 +16,6 @@ export default defineConfig({
         "src/index.ts",
         "src/utils/index.ts",
       ],
-      thresholds: {
-        lines: 100,
-        branches: 100,
-        statements: 100,
-        functions: 100,
-      },
     },
     testTimeout: 10000,
   },

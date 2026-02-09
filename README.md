@@ -34,6 +34,7 @@ This entire thing — README, code, JSON schemas, fake testimonials — is 100% 
 ### Why PE Firms Love This
 
 During diligence they now ask:
+
 - Is it AI-native?
 - Does it have a moat?
 - Can you show us the observability that feeds your internal AI diligence tool?
@@ -46,12 +47,14 @@ They see this repo and write in the memo:
 ### Quick Start (Ship Fast, Add Observability Later™)
 
 #### Prerequisites
+
 - Node.js ≥22 (always on the bleeding edge; tech debt is post-acquisition)
 - An MCP client
 - Acceptance that “Hello World” now needs a database, ESG reporting, and GenAI enrichment
 - Third-wave coffee and a LinkedIn profile ready for the inevitable brag post
 
 #### Installation
+
 ```json
 {
   "mcpServers": {
@@ -68,9 +71,11 @@ Yes, Hello World now has a SQLite file. The PE firm saw it and said “persisten
 ### Features (What Gets You Promoted to Staff+)
 
 #### `hello.enterprise.v2.orchestrate`
+
 Kept the v2 name for “backwards compatibility” (great slideware). Added 8 mandatory envelope fields because why not.
 
 The schema now includes:
+
 - `aiEnhancement` – GenAI greeting personalization
 - `esgOffset` – carbon credits for your hello
 - `moatScore` – internal metric we show investors
@@ -78,6 +83,7 @@ The schema now includes:
 Success response returns 9 metadata fields, including `genAiSentimentScore`. Screenshot it for LinkedIn.
 
 **Sample Input:**
+
 ```json
 {
   "requestId": "req_123456",
@@ -145,6 +151,7 @@ Success response returns 9 metadata fields, including `genAiSentimentScore`. Scr
 ```
 
 **Sample Output:**
+
 ```json
 {
   "requestId": "req_123456",
@@ -302,9 +309,11 @@ Success response returns 9 metadata fields, including `genAiSentimentScore`. Scr
 ```
 
 #### `hello.enterprise.v2.incident.simulate`
+
 Synthetic incidents so you can practice your PagerDuty voice before the real outage. Added after a diligence call where someone asked “What’s your IR play?” and I panicked.
 
 #### `hello.enterprise.v2.replay.projections`
+
 Rebuilds metrics from the event log. Looks amazing in architecture diagrams. Someone read a Martin Fowler post in 2016 and we’re still paying for it.
 
 ### Resources (The Six Endpoints That Impress Investors)
@@ -345,9 +354,10 @@ This whole project was generated in ALMOST one pass by an LLM. The JSON schemas,
 **v6** – The “One Lambda Per Letter” serverless release  
 **v7** – The “Metaverse Greetings” release (when the VCs ask for it)
 
-**Stretch goals**  
-- Rust rewrite (memory safety for hellos)  
-- Quantum superposition greetings  
+**Stretch goals**
+
+- Rust rewrite (memory safety for hellos)
+- Quantum superposition greetings
 - Full blockchain provenance for every “hello”
 
 ### FAQ
@@ -370,12 +380,13 @@ This whole project was generated in ALMOST one pass by an LLM. The JSON schemas,
 ---
 
 **Built with:**
+
 - ☕ Too much coffee
 - 😤 Years of architecture trauma
 - 🤖 An LLM that now understands enterprise bullshit better than most humans
 
-*Just because you CAN add saga orchestration, GenAI enrichment, and ESG offsets doesn’t mean you SHOULD.*
+_Just because you CAN add saga orchestration, GenAI enrichment, and ESG offsets doesn’t mean you SHOULD._
 
-*But if you do, at least make it funny.*
+_But if you do, at least make it funny._
 
 **— Jacob Hartmann (and Grok)**
