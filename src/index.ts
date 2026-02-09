@@ -7,7 +7,9 @@
  *
  * This server provides:
  * - Tool: hello.enterprise.v2.orchestrate - Enterprise workflow orchestration
- * - Resources: hello://v2/status, hello://v2/audit, hello://v2/metrics
+ * - Tool: hello.enterprise.v2.incident.simulate - Synthetic incident creation
+ * - Tool: hello.enterprise.v2.replay.projections - Projection replay from event log
+ * - Resources: hello://v2/status, hello://v2/audit, hello://v2/metrics, hello://v2/topology, hello://v2/runbooks, hello://v2/incidents
  * - Prompt: hello.v2.orchestrate - Instructions for building workflow payloads
  *
  * Transport: stdio (JSON-RPC over stdin/stdout)
@@ -51,8 +53,8 @@ function createServer(): McpServer {
     { name: SERVER_NAME, version: SERVER_VERSION },
     {
       instructions:
-        "Hello World Enterprise MCP server v2. A parody of enterprise over-engineering. " +
-        "Use hello.enterprise.v2.orchestrate to execute the strict policy workflow.",
+        "Hello World Enterprise MCP server v3. A parody of enterprise over-engineering. " +
+        "Use hello.enterprise.v2.orchestrate for always-on saga orchestration with deterministic chaos.",
     }
   );
 

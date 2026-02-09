@@ -28,5 +28,9 @@ coverage/
 npm-debug.log*
 pnpm-debug.log*
 
+# Local enterprise sqlite storage
+data/
+*.sqlite
+
 # TypeScript cache
 *.tsbuildinfo

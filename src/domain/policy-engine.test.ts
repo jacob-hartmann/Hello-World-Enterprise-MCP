@@ -1,26 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { createValidRequest } from "../__test-helpers__/request-factory.js";
 import { PolicyEngine } from "./policy-engine.js";
 
 describe("PolicyEngine", () => {
   it("allows strict-default request with supported locale", () => {
     const engine = new PolicyEngine();
-    const outcome = engine.evaluate({
-      recipient: "World",
-      formality: "casual",
-      locale: "en-US",
-      includeTimestamp: false,
-      policies: {
-        complianceProfile: "strict-default",
-        enforceMetadataRules: true,
-      },
-      telemetry: {
-        includeTrace: true,
-        includePolicyDecisions: true,
-      },
-      metadata: {
-        team: "platform",
-      },
-    });
+    const outcome = engine.evaluate(createValidRequest());
 
     expect(outcome.outcome).toBe("allowed");
     expect(outcome.decisions.length).toBeGreaterThan(0);
@@ -33,21 +18,11 @@ describe("PolicyEngine", () => {
       metadata[`k${i}`] = "value";
     }
 
-    const outcome = engine.evaluate({
-      recipient: "World",
-      formality: "casual",
-      locale: "en-US",
-      includeTimestamp: false,
-      policies: {
-        complianceProfile: "strict-default",
-        enforceMetadataRules: true,
-      },
-      telemetry: {
-        includeTrace: true,
-        includePolicyDecisions: true,
-      },
-      metadata,
-    });
+    const outcome = engine.evaluate(
+      createValidRequest({
+        metadata,
+      })
+    );
 
     expect(outcome.outcome).toBe("denied");
     expect(outcome.decisions[0]).toContain("maximum");

@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { ENTERPRISE_GREETING } from "../constants.js";
 import {
   orchestrateRequestSchema,
   type ErrorEnvelope,
@@ -8,14 +7,14 @@ import {
   type OrchestrateRequest,
   type SuccessResponse,
 } from "../contracts/v2.js";
-import type { PolicyEngine } from "../domain/policy-engine.js";
-import type { GreetingStrategyFactory } from "../domain/strategy-factory.js";
-import type {
-  EventBus,
-  WorkflowEvent,
-} from "../infrastructure/events/event-bus.js";
+import type { EventBus } from "../infrastructure/events/event-bus.js";
 import type { AuditRepository } from "../infrastructure/repositories/audit-repository.js";
+import type { EventLogRepository } from "../infrastructure/repositories/event-log-repository.js";
+import type { IdempotencyRepository } from "../infrastructure/repositories/idempotency-repository.js";
 import type { MetricsRepository } from "../infrastructure/repositories/metrics-repository.js";
+import type { ProjectionReplayService } from "./projection-replay-service.js";
+import type { SagaEngine } from "./saga-engine.js";
+import { canonicalStringify, hashString } from "../utils/hash.js";
 
 interface StageContext {
   requestId: string;
@@ -25,11 +24,13 @@ interface StageContext {
 
 export class GreetingOrchestrator {
   public constructor(
-    private readonly strategyFactory: GreetingStrategyFactory,
-    private readonly policyEngine: PolicyEngine,
+    private readonly sagaEngine: SagaEngine,
     private readonly eventBus: EventBus,
     private readonly auditRepository: AuditRepository,
-    private readonly metricsRepository: MetricsRepository
+    private readonly eventLogRepository: EventLogRepository,
+    private readonly idempotencyRepository: IdempotencyRepository,
+    private readonly metricsRepository: MetricsRepository,
+    private readonly projectionReplayService: ProjectionReplayService
   ) {}
 
   public execute(rawInput: unknown): OrchestratorResult {
@@ -48,45 +49,134 @@ export class GreetingOrchestrator {
       );
     }
 
-    this.publishEvent("request.validated", context);
+    const requestHash = hashString(canonicalStringify(request));
+    const existing = this.idempotencyRepository.find(
+      request.delivery.idempotencyKey
+    );
+    if (existing) {
+      if (existing.requestHash !== requestHash) {
+        return this.fail(
+          context,
+          "IDEMPOTENCY_CONFLICT",
+          "Idempotency key reuse detected with mismatched payload",
+          {
+            idempotencyKey: request.delivery.idempotencyKey,
+          },
+          "deduplicated"
+        );
+      }
 
-    const policy = this.policyEnforcementStage(request);
-    if (policy.outcome === "denied") {
-      this.metricsRepository.increment("policy_denied_total");
-      this.metricsStage("denied", context.startedAtMs);
-      this.publishEvent("policy.denied", context, {
-        decisions: policy.decisions,
-      });
-      return this.fail(
-        context,
-        "POLICY_DENIED",
-        "Request rejected by strict-default policy",
-        {
-          decisions: policy.decisions,
-        }
-      );
+      const replayed = JSON.parse(existing.responseJson) as OrchestratorResult;
+      if ("error" in replayed) {
+        return {
+          ...replayed,
+          deliveryStatus: "deduplicated",
+        };
+      }
+
+      return {
+        ...replayed,
+        deliveryStatus: "deduplicated",
+      };
     }
 
-    this.publishEvent("policy.allowed", context, {
-      decisions: policy.decisions,
+    this.publishEvent("request.validated", context);
+    const saga = this.sagaEngine.run(request, {
+      requestId: context.requestId,
+      traceId: context.traceId,
     });
 
-    const greeting = this.greetingGenerationStage(request);
-    this.metricsRepository.increment(`formality_${request.formality}_total`);
-    this.metricsRepository.increment("success_total");
-    this.metricsStage("success", context.startedAtMs);
-
-    const response = this.responseAssemblyStage(
+    const projectionSnapshot = this.projectionReplayService.snapshot();
+    const baseResponse = this.buildResponse(
       context,
       request,
-      greeting,
-      policy.decisions
+      saga,
+      projectionSnapshot.projectionVersion
     );
 
+    this.idempotencyRepository.save(
+      request.delivery.idempotencyKey,
+      requestHash,
+      JSON.stringify(baseResponse)
+    );
+
+    this.metricsStage(
+      "error" in baseResponse ? "denied" : "success",
+      context.startedAtMs
+    );
     this.publishEvent("response.generated", context, {
-      formality: request.formality,
+      outcome: "error" in baseResponse ? "error" : "success",
     });
 
+    return baseResponse;
+  }
+
+  private buildResponse(
+    context: StageContext,
+    request: OrchestrateRequest,
+    saga: ReturnType<SagaEngine["run"]>,
+    projectionVersion: number
+  ): OrchestratorResult {
+    const eventLogOffset = this.eventLogRepository.latestOffset();
+    const commonDurability = {
+      eventLogOffset,
+      projectionVersion,
+      replayable: true as const,
+    };
+
+    if (saga.kind === "failure") {
+      this.metricsRepository.increment("policy_denied_total");
+      return {
+        requestId: context.requestId,
+        traceId: context.traceId,
+        deliveryStatus: "processed",
+        error: {
+          code: saga.code,
+          message: saga.message,
+          details: {
+            ...saga.details,
+            sagaExecution: saga.sagaExecution,
+            routingDecision: saga.routingDecision,
+            chaosReport: saga.chaosReport,
+            durability: commonDurability,
+            runbook: saga.runbook,
+            aiEnhancementReport: saga.aiEnhancementReport,
+            esgOffsetReport: saga.esgOffsetReport,
+            moatAssessment: saga.moatAssessment,
+            enterpriseMetadata: saga.enterpriseMetadata,
+            incident: saga.incident,
+          },
+        },
+      };
+    }
+
+    const response: SuccessResponse = {
+      requestId: context.requestId,
+      traceId: request.telemetry.includeTrace ? context.traceId : "suppressed",
+      deliveryStatus: "processed",
+      greeting: saga.greeting,
+      policy: {
+        outcome: saga.policy.outcome,
+        decisions: request.telemetry.includePolicyDecisions
+          ? saga.policy.decisions
+          : [],
+      },
+      audit: {
+        eventCount: this.auditRepository.count(),
+        storedIn: "sqlite+memory",
+      },
+      metrics: this.metricsRepository.snapshot(),
+      sagaExecution: saga.sagaExecution,
+      routingDecision: saga.routingDecision,
+      chaosReport: saga.chaosReport,
+      durability: commonDurability,
+      runbook: saga.runbook,
+      aiEnhancementReport: saga.aiEnhancementReport,
+      esgOffsetReport: saga.esgOffsetReport,
+      moatAssessment: saga.moatAssessment,
+      enterpriseMetadata: saga.enterpriseMetadata,
+      incident: saga.incident,
+    };
     return response;
   }
 
@@ -138,21 +228,8 @@ export class GreetingOrchestrator {
     return parsed.data;
   }
 
-  private policyEnforcementStage(request: OrchestrateRequest): {
-    outcome: "allowed" | "denied";
-    decisions: string[];
-  } {
-    return this.policyEngine.evaluate(request);
-  }
-
-  private greetingGenerationStage(request: OrchestrateRequest): string {
-    return this.strategyFactory
-      .resolve(request.formality)
-      .render(request.recipient);
-  }
-
   private metricsStage(
-    outcome: "success" | "denied" | "validation_error",
+    outcome: "success" | "validation_error" | "denied",
     startedAtMs: number
   ): void {
     this.metricsRepository.increment(`outcome_${outcome}_total`);
@@ -160,64 +237,32 @@ export class GreetingOrchestrator {
     this.metricsRepository.increment("latency_ms_total", elapsedMs);
   }
 
-  private responseAssemblyStage(
-    context: StageContext,
-    request: OrchestrateRequest,
-    renderedGreeting: string,
-    policyDecisions: string[]
-  ): SuccessResponse {
-    const greeting = {
-      rendered: renderedGreeting,
-      edition: ENTERPRISE_GREETING,
-      locale: request.locale,
-      formality: request.formality,
-      ...(request.includeTimestamp
-        ? { timestamp: new Date().toISOString() }
-        : {}),
-    };
-
-    return {
-      requestId: context.requestId,
-      traceId: request.telemetry.includeTrace ? context.traceId : "suppressed",
-      greeting,
-      policy: {
-        outcome: "allowed",
-        decisions: request.telemetry.includePolicyDecisions
-          ? policyDecisions
-          : [],
-      },
-      audit: {
-        eventCount: this.auditStage(),
-        storedIn: "in-memory",
-      },
-      metrics: this.metricsRepository.snapshot(),
-    };
-  }
-
-  private auditStage(): number {
-    return this.auditRepository.count();
-  }
-
   private publishEvent(
-    name: WorkflowEvent["name"],
+    name:
+      | "request.received"
+      | "request.validated"
+      | "policy.allowed"
+      | "policy.denied"
+      | "response.generated"
+      | "response.failed",
     context: StageContext,
     details?: Record<string, unknown>
   ): void {
-    const event: WorkflowEvent = {
+    this.eventBus.publish({
       name,
       timestamp: new Date().toISOString(),
       requestId: context.requestId,
       traceId: context.traceId,
       ...(details ? { details } : {}),
-    };
-    this.eventBus.publish(event);
+    });
   }
 
   private fail(
     context: StageContext,
     code: string,
     message: string,
-    details?: Record<string, unknown>
+    details?: Record<string, unknown>,
+    deliveryStatus: "processed" | "deduplicated" = "processed"
   ): ErrorEnvelope {
     this.publishEvent("response.failed", context, {
       code,
@@ -231,6 +276,7 @@ export class GreetingOrchestrator {
     return {
       requestId: context.requestId,
       traceId: context.traceId,
+      deliveryStatus,
       error,
     };
   }

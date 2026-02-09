@@ -9,17 +9,22 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
-- Enterprise Orchestrator v2 architecture with DI container, strategy factory, policy engine, in-memory event bus, audit repository, and metrics repository
-- New v2 tool `hello.enterprise.v2.orchestrate` with strict request schema and fail-closed error envelope
-- New v2 resources `hello://v2/status`, `hello://v2/audit`, and `hello://v2/metrics`
-- New prompt `hello.v2.orchestrate` for orchestrator payload guidance
-- Domain, infrastructure, contract, and application-layer unit tests for v2 components
+- v3 distributed-theater orchestration with always-on Saga + Compensation workflow
+- Deterministic chaos engine with seed-based fault injection and bounded jitter
+- SQLite durability layer (`node:sqlite`) with migrations and replayable event log
+- Idempotency repository and deduplicated delivery semantics
+- Projection replay service with deterministic checksum snapshots
+- New ops tools: `hello.enterprise.v2.incident.simulate` and `hello.enterprise.v2.replay.projections`
+- New ops resources: `hello://v2/topology`, `hello://v2/runbooks`, and `hello://v2/incidents`
+- Expanded orchestrator request schema with required `delivery`, `traceContext`, `routing`, `saga`, `chaos`, and `governance` envelopes
+- Expanded orchestrator response fields: `sagaExecution`, `routingDecision`, `chaosReport`, `durability`, `runbook`, and `incident`
+- Additional test coverage for saga paths, chaos determinism, replay/projection, idempotency, and ops surfaces
 
 ### Changed
 
-- **Breaking:** Removed v1 interfaces `hello.world`, `hello.enterprise.greet`, `hello://status`, and `hello.greet`
-- Updated server instructions and capability reporting to v2 namespace
-- Bumped package version to `1.0.0` to reflect breaking interface changes
+- Kept existing v2 MCP identifiers while expanding contracts and runtime behavior for v3 architecture
+- Updated README examples for distributed-theater payloads and operations tooling
+- Added local SQLite path defaults and gitignore rules for durable runtime storage
 
 ### Fixed
 

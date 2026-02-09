@@ -6,8 +6,8 @@ import {
 } from "../constants.js";
 import { registerPrompts } from "./index.js";
 
-describe("registerPrompts (v2)", () => {
-  it("registers only the v2 orchestrator prompt", () => {
+describe("registerPrompts (v3 guidance)", () => {
+  it("registers orchestrator prompt with same identifier", () => {
     const prompts = new Map<
       string,
       (args: Record<string, unknown>) => unknown
@@ -28,7 +28,7 @@ describe("registerPrompts (v2)", () => {
     expect(Array.from(prompts.keys())).toEqual([ORCHESTRATOR_PROMPT_NAME]);
   });
 
-  it("returns workflow guidance containing the v2 tool name", () => {
+  it("returns enterprise envelope guidance", () => {
     const prompts = new Map<
       string,
       (args: Record<string, unknown>) => unknown
@@ -54,8 +54,13 @@ describe("registerPrompts (v2)", () => {
       messages: { content: { text: string } }[];
     };
 
-    expect(payload.messages[0]?.content.text).toContain(ORCHESTRATOR_TOOL_NAME);
-    expect(payload.messages[0]?.content.text).toContain("strict-default");
-    expect(payload.messages[0]?.content.text).toContain("Universe");
+    const text = payload.messages[0]?.content.text ?? "";
+    expect(text).toContain(ORCHESTRATOR_TOOL_NAME);
+    expect(text).toContain('"delivery"');
+    expect(text).toContain('"chaos"');
+    expect(text).toContain('"aiEnhancement"');
+    expect(text).toContain('"esgOffset"');
+    expect(text).toContain('"moatScore"');
+    expect(text).toContain("Compensated-path tip");
   });
 });

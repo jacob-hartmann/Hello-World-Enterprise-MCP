@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { createValidRequest } from "../__test-helpers__/request-factory.js";
 import { composeApplication } from "../application/composition-root.js";
-import { ORCHESTRATOR_TOOL_NAME } from "../constants.js";
+import {
+  INCIDENT_SIMULATION_TOOL_NAME,
+  ORCHESTRATOR_TOOL_NAME,
+  PROJECTION_REPLAY_TOOL_NAME,
+} from "../constants.js";
 import { registerTools } from "./index.js";
 import { createToolTestContext } from "./__test-helpers__/tool-test-utils.js";
 
@@ -23,88 +28,66 @@ function extractFirstContentText(result: Record<string, unknown>): string {
   return (first as { text: string }).text;
 }
 
-describe("registerTools (v2)", () => {
-  it("registers only the v2 orchestrator tool", () => {
+describe("registerTools (v3 over v2 names)", () => {
+  it("registers orchestrator and ops tools", () => {
     const ctx = createToolTestContext();
-    registerTools(ctx.server, composeApplication());
-    expect(Array.from(ctx.tools.keys())).toEqual([ORCHESTRATOR_TOOL_NAME]);
+    registerTools(ctx.server, composeApplication({ dbPath: ":memory:" }));
+    expect(Array.from(ctx.tools.keys()).sort()).toEqual([
+      INCIDENT_SIMULATION_TOOL_NAME,
+      ORCHESTRATOR_TOOL_NAME,
+      PROJECTION_REPLAY_TOOL_NAME,
+    ]);
   });
 
-  it("returns a structured success payload for valid requests", async () => {
+  it("orchestrator returns expanded saga/durability response", async () => {
     const ctx = createToolTestContext();
-    registerTools(ctx.server, composeApplication());
+    registerTools(ctx.server, composeApplication({ dbPath: ":memory:" }));
 
-    const result = await ctx.callTool(ORCHESTRATOR_TOOL_NAME, {
-      recipient: "Enterprise Architect",
-      formality: "formal",
-      locale: "en-US",
-      includeTimestamp: true,
-      policies: {
-        complianceProfile: "strict-default",
-        enforceMetadataRules: true,
-      },
-      telemetry: {
-        includeTrace: true,
-        includePolicyDecisions: true,
-      },
-      metadata: {
-        department: "Engineering",
-      },
-    });
-
+    const result = await ctx.callTool(
+      ORCHESTRATOR_TOOL_NAME,
+      createValidRequest()
+    );
     const payload = JSON.parse(extractFirstContentText(result)) as {
-      requestId: string;
-      traceId: string;
-      greeting: { rendered: string; timestamp?: string };
-      policy: { outcome: string; decisions: string[] };
-      audit: { eventCount: number; storedIn: string };
-      metrics: { counters: Record<string, number> };
+      deliveryStatus: string;
+      sagaExecution: { status: string };
+      routingDecision: { selectedRegion: string };
+      chaosReport: { deterministicKey: string };
+      durability: { replayable: boolean };
+      enterpriseMetadata: { genAiSentimentScore: number; moatScore: number };
     };
 
-    expect(payload.requestId.length).toBeGreaterThan(0);
-    expect(payload.traceId.length).toBeGreaterThan(0);
-    expect(payload.greeting.rendered).toBe("Greetings, Enterprise Architect");
-    expect(payload.greeting.timestamp).toMatch(/Z$/);
-    expect(payload.policy.outcome).toBe("allowed");
-    expect(payload.policy.decisions.length).toBeGreaterThan(0);
-    expect(payload.audit.storedIn).toBe("in-memory");
-    expect(payload.audit.eventCount).toBeGreaterThan(0);
-    expect(payload.metrics.counters["requests_total"]).toBe(1);
+    expect(payload.deliveryStatus).toBe("processed");
+    expect(payload.sagaExecution.status).toBe("completed");
+    expect(payload.routingDecision.selectedRegion.length).toBeGreaterThan(0);
+    expect(payload.chaosReport.deterministicKey.length).toBeGreaterThan(0);
+    expect(payload.durability.replayable).toBe(true);
+    expect(
+      payload.enterpriseMetadata.genAiSentimentScore
+    ).toBeGreaterThanOrEqual(0);
+    expect(payload.enterpriseMetadata.moatScore).toBeGreaterThanOrEqual(0);
   });
 
-  it("returns fail-closed error envelope for policy-denied requests", async () => {
+  it("ops tools simulate incidents and replay projections", async () => {
     const ctx = createToolTestContext();
-    registerTools(ctx.server, composeApplication());
-    const metadata: Record<string, string> = {};
-    for (let i = 0; i < 17; i += 1) {
-      metadata[`key_${i}`] = "value";
-    }
+    registerTools(ctx.server, composeApplication({ dbPath: ":memory:" }));
 
-    const result = await ctx.callTool(ORCHESTRATOR_TOOL_NAME, {
-      recipient: "World",
-      formality: "casual",
-      locale: "en-US",
-      includeTimestamp: false,
-      policies: {
-        complianceProfile: "strict-default",
-        enforceMetadataRules: true,
-      },
-      telemetry: {
-        includeTrace: true,
-        includePolicyDecisions: true,
-      },
-      metadata,
+    const incidentResult = await ctx.callTool(INCIDENT_SIMULATION_TOOL_NAME, {
+      severity: "sev-2",
+      title: "Synthetic incident",
+      details: "Triggered for test",
     });
+    const incidentPayload = JSON.parse(
+      extractFirstContentText(incidentResult)
+    ) as { incident: { id: string }; runbook: { id: string } };
+    expect(incidentPayload.incident.id.length).toBeGreaterThan(0);
+    expect(incidentPayload.runbook.id.length).toBeGreaterThan(0);
 
-    const payload = JSON.parse(extractFirstContentText(result)) as {
-      error?: {
-        code: string;
-        message: string;
-        details?: { decisions?: string[] };
-      };
+    const replayResult = await ctx.callTool(PROJECTION_REPLAY_TOOL_NAME, {});
+    const replayPayload = JSON.parse(extractFirstContentText(replayResult)) as {
+      projectionVersion: number;
+      checksum: string;
     };
-
-    expect(payload.error?.code).toBe("POLICY_DENIED");
-    expect(payload.error?.message).toContain("strict-default");
+    expect(replayPayload.projectionVersion).toBeGreaterThanOrEqual(1);
+    expect(replayPayload.checksum.length).toBeGreaterThan(0);
   });
 });
