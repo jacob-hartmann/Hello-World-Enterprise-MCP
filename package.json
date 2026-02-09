@@ -1,6 +1,6 @@
 {
   "name": "hello-world-enterprise-mcp",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A parody MCP server demonstrating enterprise over-engineering of 'Hello World'",
   "type": "module",
   "main": "./dist/index.js",

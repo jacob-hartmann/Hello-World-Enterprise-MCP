@@ -6,10 +6,9 @@
  * over-engineering of "Hello World".
  *
  * This server provides:
- * - Tool: hello.world - Simple Hello World greeting
- * - Tool: hello.enterprise.greet - Enterprise-grade greeting (over-parameterized)
- * - Resource: hello://status - Server status information
- * - Prompt: hello.greet - Instructions for using the greeting tools
+ * - Tool: hello.enterprise.v2.orchestrate - Enterprise workflow orchestration
+ * - Resources: hello://v2/status, hello://v2/audit, hello://v2/metrics
+ * - Prompt: hello.v2.orchestrate - Instructions for building workflow payloads
  *
  * Transport: stdio (JSON-RPC over stdin/stdout)
  *
@@ -22,6 +21,7 @@ import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import { composeApplication } from "./application/composition-root.js";
 import { registerTools } from "./tools/index.js";
 import { registerResources } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
@@ -46,18 +46,18 @@ async function startStdioServer(server: McpServer): Promise<void> {
  * Create an MCP server with all handlers registered
  */
 function createServer(): McpServer {
+  const services = composeApplication();
   const server = new McpServer(
     { name: SERVER_NAME, version: SERVER_VERSION },
     {
       instructions:
-        "Hello World Enterprise MCP server. A parody of enterprise over-engineering. " +
-        "Start with hello.world for a simple greeting, or use hello.enterprise.greet " +
-        "for the full enterprise experience with extensive parameterization.",
+        "Hello World Enterprise MCP server v2. A parody of enterprise over-engineering. " +
+        "Use hello.enterprise.v2.orchestrate to execute the strict policy workflow.",
     }
   );
 
-  registerTools(server);
-  registerResources(server);
+  registerTools(server, services);
+  registerResources(server, services);
   registerPrompts(server);
 
   return server;

@@ -1,56 +1,39 @@
 /**
  * MCP Prompts Registration
- *
- * Registers all available prompts with the MCP server.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import {
+  ORCHESTRATOR_PROMPT_NAME,
+  ORCHESTRATOR_TOOL_NAME,
+} from "../constants.js";
 
-/**
- * Register all prompts with the MCP server
- */
 export function registerPrompts(server: McpServer): void {
   server.registerPrompt(
-    "hello.greet",
+    ORCHESTRATOR_PROMPT_NAME,
     {
       description:
-        "Guide for using the Hello World Enterprise greeting tools. " +
-        "Helps users choose between the simple and enterprise greeting options.",
+        "Guides callers through constructing a valid v2 orchestration request payload",
       argsSchema: {
         recipient: z
           .string()
           .optional()
-          .describe("Who to greet (default: 'World')"),
-        useEnterprise: z
-          .boolean()
+          .describe("Recipient name (default: World)"),
+        formality: z
+          .enum(["casual", "professional", "formal"])
           .optional()
-          .describe("Use the enterprise greeting tool (default: false)"),
+          .describe("Formality level (default: professional)"),
+        locale: z
+          .string()
+          .optional()
+          .describe("Locale (strict allowlist in v2, default: en-US)"),
       },
     },
     (args) => {
       const recipient = args.recipient ?? "World";
-      const useEnterprise = args.useEnterprise ?? false;
-
-      if (useEnterprise) {
-        return {
-          messages: [
-            {
-              role: "user" as const,
-              content: {
-                type: "text" as const,
-                text:
-                  `Use the hello.enterprise.greet tool to greet "${recipient}" with full enterprise features.\n\n` +
-                  `Available options:\n` +
-                  `- formality: Choose 'casual', 'professional', or 'formal'\n` +
-                  `- includeTimestamp: Add ISO 8601 timestamp\n` +
-                  `- metadata: Include custom key-value pairs\n\n` +
-                  `Example: Call hello.enterprise.greet with recipient="${recipient}", formality="professional", and includeTimestamp=true`,
-              },
-            },
-          ],
-        };
-      }
+      const formality = args.formality ?? "professional";
+      const locale = args.locale ?? "en-US";
 
       return {
         messages: [
@@ -59,9 +42,27 @@ export function registerPrompts(server: McpServer): void {
             content: {
               type: "text" as const,
               text:
-                `Use the hello.world tool to get a simple greeting.\n\n` +
-                `For a basic greeting, just call hello.world with no arguments.\n` +
-                `For enterprise features, use hello.enterprise.greet instead with recipient="${recipient}".`,
+                `Call ${ORCHESTRATOR_TOOL_NAME} with a strict-default enterprise payload.\n\n` +
+                `Suggested payload:\n` +
+                `{\n` +
+                `  "recipient": "${recipient}",\n` +
+                `  "formality": "${formality}",\n` +
+                `  "locale": "${locale}",\n` +
+                `  "includeTimestamp": true,\n` +
+                `  "policies": {\n` +
+                `    "complianceProfile": "strict-default",\n` +
+                `    "enforceMetadataRules": true\n` +
+                `  },\n` +
+                `  "telemetry": {\n` +
+                `    "includeTrace": true,\n` +
+                `    "includePolicyDecisions": true\n` +
+                `  },\n` +
+                `  "metadata": {\n` +
+                `    "department": "Platform",\n` +
+                `    "program": "GreetingTransformation"\n` +
+                `  }\n` +
+                `}\n\n` +
+                `If policy checks fail, expect a fail-closed error envelope instead of greeting output.`,
             },
           },
         ],

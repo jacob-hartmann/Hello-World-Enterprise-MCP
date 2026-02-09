@@ -1,113 +1,110 @@
-/**
- * Tests for tools registration
- */
-
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import { composeApplication } from "../application/composition-root.js";
+import { ORCHESTRATOR_TOOL_NAME } from "../constants.js";
 import { registerTools } from "./index.js";
 import { createToolTestContext } from "./__test-helpers__/tool-test-utils.js";
 
-describe("registerTools", () => {
-  it("should register hello.world tool", () => {
+function extractFirstContentText(result: Record<string, unknown>): string {
+  const content = result["content"];
+  if (!Array.isArray(content) || content.length === 0) {
+    throw new Error("Tool result does not contain content");
+  }
+
+  const first = content[0];
+  if (
+    typeof first !== "object" ||
+    first === null ||
+    !("text" in first) ||
+    typeof (first as { text?: unknown }).text !== "string"
+  ) {
+    throw new Error("Tool content does not include a text field");
+  }
+
+  return (first as { text: string }).text;
+}
+
+describe("registerTools (v2)", () => {
+  it("registers only the v2 orchestrator tool", () => {
     const ctx = createToolTestContext();
-    registerTools(ctx.server);
-    expect(ctx.tools.has("hello.world")).toBe(true);
+    registerTools(ctx.server, composeApplication());
+    expect(Array.from(ctx.tools.keys())).toEqual([ORCHESTRATOR_TOOL_NAME]);
   });
 
-  it("should register hello.enterprise.greet tool", () => {
+  it("returns a structured success payload for valid requests", async () => {
     const ctx = createToolTestContext();
-    registerTools(ctx.server);
-    expect(ctx.tools.has("hello.enterprise.greet")).toBe(true);
-  });
+    registerTools(ctx.server, composeApplication());
 
-  it("hello.world should return Hello World", async () => {
-    const ctx = createToolTestContext();
-    registerTools(ctx.server);
-    const result = await ctx.callTool("hello.world", {});
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "Hello World",
-        },
-      ],
-    });
-  });
-
-  it("hello.enterprise.greet should return enterprise greeting with defaults", async () => {
-    const ctx = createToolTestContext();
-    registerTools(ctx.server);
-    const result = await ctx.callTool("hello.enterprise.greet", {});
-    expect(result).toHaveProperty("content");
-    const content = (result as { content: { type: string; text: string }[] })
-      .content;
-    expect(content).toHaveLength(1);
-    expect(content[0]?.type).toBe("text");
-    const parsed = JSON.parse(content[0]?.text ?? "{}");
-    expect(parsed).toHaveProperty("greeting", "Hello World");
-    expect(parsed).toHaveProperty(
-      "edition",
-      "Hello World (Enterprise Edition)"
-    );
-    expect(parsed).toHaveProperty("formality", "casual");
-  });
-
-  it("hello.enterprise.greet should handle custom recipient", async () => {
-    const ctx = createToolTestContext();
-    registerTools(ctx.server);
-    const result = await ctx.callTool("hello.enterprise.greet", {
-      recipient: "Enterprise",
-    });
-    const content = (result as { content: { type: string; text: string }[] })
-      .content;
-    const parsed = JSON.parse(content[0]?.text ?? "{}");
-    expect(parsed.greeting).toBe("Hello Enterprise");
-  });
-
-  it("hello.enterprise.greet should handle formality levels", async () => {
-    const ctx = createToolTestContext();
-    registerTools(ctx.server);
-
-    // Test formal
-    let result = await ctx.callTool("hello.enterprise.greet", {
+    const result = await ctx.callTool(ORCHESTRATOR_TOOL_NAME, {
+      recipient: "Enterprise Architect",
       formality: "formal",
-    });
-    let content = (result as { content: { type: string; text: string }[] })
-      .content;
-    let parsed = JSON.parse(content[0]?.text ?? "{}");
-    expect(parsed.greeting).toBe("Greetings, World");
-
-    // Test professional
-    result = await ctx.callTool("hello.enterprise.greet", {
-      formality: "professional",
-    });
-    content = (result as { content: { type: string; text: string }[] }).content;
-    parsed = JSON.parse(content[0]?.text ?? "{}");
-    expect(parsed.greeting).toBe("Hello, World");
-  });
-
-  it("hello.enterprise.greet should include timestamp when requested", async () => {
-    const ctx = createToolTestContext();
-    registerTools(ctx.server);
-    const result = await ctx.callTool("hello.enterprise.greet", {
+      locale: "en-US",
       includeTimestamp: true,
+      policies: {
+        complianceProfile: "strict-default",
+        enforceMetadataRules: true,
+      },
+      telemetry: {
+        includeTrace: true,
+        includePolicyDecisions: true,
+      },
+      metadata: {
+        department: "Engineering",
+      },
     });
-    const content = (result as { content: { type: string; text: string }[] })
-      .content;
-    const parsed = JSON.parse(content[0]?.text ?? "{}");
-    expect(parsed).toHaveProperty("timestamp");
-    expect(typeof parsed.timestamp).toBe("string");
+
+    const payload = JSON.parse(extractFirstContentText(result)) as {
+      requestId: string;
+      traceId: string;
+      greeting: { rendered: string; timestamp?: string };
+      policy: { outcome: string; decisions: string[] };
+      audit: { eventCount: number; storedIn: string };
+      metrics: { counters: Record<string, number> };
+    };
+
+    expect(payload.requestId.length).toBeGreaterThan(0);
+    expect(payload.traceId.length).toBeGreaterThan(0);
+    expect(payload.greeting.rendered).toBe("Greetings, Enterprise Architect");
+    expect(payload.greeting.timestamp).toMatch(/Z$/);
+    expect(payload.policy.outcome).toBe("allowed");
+    expect(payload.policy.decisions.length).toBeGreaterThan(0);
+    expect(payload.audit.storedIn).toBe("in-memory");
+    expect(payload.audit.eventCount).toBeGreaterThan(0);
+    expect(payload.metrics.counters["requests_total"]).toBe(1);
   });
 
-  it("hello.enterprise.greet should include metadata when provided", async () => {
+  it("returns fail-closed error envelope for policy-denied requests", async () => {
     const ctx = createToolTestContext();
-    registerTools(ctx.server);
-    const result = await ctx.callTool("hello.enterprise.greet", {
-      metadata: { key: "value", foo: "bar" },
+    registerTools(ctx.server, composeApplication());
+    const metadata: Record<string, string> = {};
+    for (let i = 0; i < 17; i += 1) {
+      metadata[`key_${i}`] = "value";
+    }
+
+    const result = await ctx.callTool(ORCHESTRATOR_TOOL_NAME, {
+      recipient: "World",
+      formality: "casual",
+      locale: "en-US",
+      includeTimestamp: false,
+      policies: {
+        complianceProfile: "strict-default",
+        enforceMetadataRules: true,
+      },
+      telemetry: {
+        includeTrace: true,
+        includePolicyDecisions: true,
+      },
+      metadata,
     });
-    const content = (result as { content: { type: string; text: string }[] })
-      .content;
-    const parsed = JSON.parse(content[0]?.text ?? "{}");
-    expect(parsed).toHaveProperty("metadata");
-    expect(parsed.metadata).toEqual({ key: "value", foo: "bar" });
+
+    const payload = JSON.parse(extractFirstContentText(result)) as {
+      error?: {
+        code: string;
+        message: string;
+        details?: { decisions?: string[] };
+      };
+    };
+
+    expect(payload.error?.code).toBe("POLICY_DENIED");
+    expect(payload.error?.message).toContain("strict-default");
   });
 });

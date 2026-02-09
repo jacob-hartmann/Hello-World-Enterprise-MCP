@@ -69,99 +69,149 @@ In Cursor settings, add an MCP server:
 
 ### Tools
 
-The server provides two greeting tools:
+The server provides one intentionally over-engineered v2 orchestration tool:
 
-#### `hello.world`
+#### `hello.enterprise.v2.orchestrate`
 
-A simple, straightforward "Hello World" greeting. No parameters, no complexity, just pure greeting functionality.
+Executes a strict enterprise greeting workflow with:
 
-**Usage:**
+- request validation stage
+- policy enforcement stage (fail closed)
+- strategy-based greeting generation
+- event publication + audit capture
+- metrics aggregation
+- response assembly with trace/audit/metrics envelope
 
-```typescript
-// Returns: "Hello World"
-await client.callTool("hello.world", {});
-```
+**Request payload:**
 
-#### `hello.enterprise.greet`
-
-An over-engineered greeting system with enterprise-grade features:
-
-- **Configurable recipient** - Who to greet (default: "World")
-- **Formality levels** - Choose from casual, professional, or formal
-- **Timestamp support** - Include ISO 8601 timestamps in responses
-- **Metadata extensibility** - Add custom key-value pairs
-- **Future-proof locale support** - Reserved parameter for i18n (not yet implemented)
-
-**Parameters:**
-
-- `recipient` (string, optional) - The recipient of the greeting
-- `formality` (enum, optional) - One of: "casual", "professional", "formal"
-- `includeTimestamp` (boolean, optional) - Include ISO 8601 timestamp
-- `locale` (string, optional) - Reserved for future internationalization
-- `metadata` (object, optional) - Custom key-value pairs
+- `requestId` (string, optional)
+- `recipient` (string, required)
+- `formality` (`"casual" | "professional" | "formal"`, required)
+- `locale` (string, required, strict allowlist)
+- `includeTimestamp` (boolean, required)
+- `metadata` (`Record<string, string>`, optional)
+- `policies` (required)
+- `telemetry` (required)
 
 **Example:**
 
 ```typescript
-await client.callTool("hello.enterprise.greet", {
+await client.callTool("hello.enterprise.v2.orchestrate", {
   recipient: "Enterprise Architect",
   formality: "formal",
+  locale: "en-US",
   includeTimestamp: true,
   metadata: {
     department: "Engineering",
     project: "HelloWorld-v2.0",
   },
+  policies: {
+    complianceProfile: "strict-default",
+    enforceMetadataRules: true,
+  },
+  telemetry: {
+    includeTrace: true,
+    includePolicyDecisions: true,
+  },
 });
 ```
 
-**Response:**
+**Success response (structured JSON text):**
 
 ```json
 {
-  "greeting": "Greetings, Enterprise Architect",
-  "edition": "Hello World (Enterprise Edition)",
-  "formality": "formal",
-  "timestamp": "2026-02-09T12:34:56.789Z",
-  "metadata": {
-    "department": "Engineering",
-    "project": "HelloWorld-v2.0"
+  "requestId": "7ea4ea4f-73ab-4c63-a406-b9669ca12633",
+  "traceId": "49f11a5b-cafb-41f7-ac62-84ff10940c76",
+  "greeting": {
+    "rendered": "Greetings, Enterprise Architect",
+    "edition": "Hello World (Enterprise Edition)",
+    "locale": "en-US",
+    "formality": "formal",
+    "timestamp": "2026-02-09T12:34:56.789Z"
+  },
+  "policy": {
+    "outcome": "allowed",
+    "decisions": [
+      "Locale \"en-US\" accepted",
+      "Metadata rules enforced (2 entries within limit)"
+    ]
+  },
+  "audit": {
+    "eventCount": 5,
+    "storedIn": "in-memory"
+  },
+  "metrics": {
+    "counters": {
+      "requests_total": 1
+    }
+  }
+}
+```
+
+**Fail-closed error response:**
+
+```json
+{
+  "requestId": "external-id",
+  "traceId": "3f85f89f-204f-4c00-aefc-060197dcb132",
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "Request payload failed schema validation",
+    "details": {}
   }
 }
 ```
 
 ### Resources
 
-#### `hello://status`
+#### `hello://v2/status`
 
-Server status and metadata resource. Provides real-time information about the server's operational state and capabilities.
+Operational status, package metadata, health snapshot, and v2 capabilities.
+
+#### `hello://v2/audit`
+
+In-memory append-only event stream (recent retained events).
+
+#### `hello://v2/metrics`
+
+In-memory counter snapshot for requests, outcomes, and formality dimensions.
 
 **Returns:**
 
 ```json
 {
   "server": "hello-world-enterprise-mcp",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A parody MCP server demonstrating enterprise over-engineering",
   "status": "operational",
   "timestamp": "2026-02-09T12:34:56.789Z",
+  "health": {
+    "eventSubscriptions": 1,
+    "auditEventCount": 12
+  },
   "capabilities": {
-    "tools": ["hello.world", "hello.enterprise.greet"],
-    "resources": ["hello://status"],
-    "prompts": ["hello.greet"]
+    "tools": ["hello.enterprise.v2.orchestrate"],
+    "resources": [
+      "hello://v2/status",
+      "hello://v2/audit",
+      "hello://v2/metrics"
+    ],
+    "prompts": ["hello.v2.orchestrate"]
   }
 }
 ```
 
 ### Prompts
 
-#### `hello.greet`
+#### `hello.v2.orchestrate`
 
-Guided prompt for choosing between simple and enterprise greeting options.
+Guided prompt for constructing a strict-default orchestration payload.
 
 **Parameters:**
 
 - `recipient` (string, optional) - Who to greet
-- `useEnterprise` (boolean, optional) - Use enterprise features
+- `formality` (enum, optional) - Greeting formality
+- `locale` (string, optional) - Locale (strict allowlist)
 
 ## Why This Exists
 
@@ -197,20 +247,22 @@ pnpm test
 pnpm test:coverage
 ```
 
-## Future "Enterprise Features"
+## Breaking Changes in v2
 
-This is just the beginning. Future releases may include:
+Removed v1 interfaces:
 
-- Dependency Injection Container
-- Abstract Factory Pattern for Greetings
-- Strategy Pattern for Formality Selection
-- Observer Pattern for Greeting Events
-- Repository Pattern for Greeting Storage
-- Saga Pattern for Distributed Greetings
-- Circuit Breaker for Greeting Resilience
-- Comprehensive Logging Framework
-- Metrics and Observability Dashboard
-- Multi-Region Greeting Replication
+- `hello.world`
+- `hello.enterprise.greet`
+- `hello://status`
+- `hello.greet`
+
+Replacements:
+
+- `hello.enterprise.v2.orchestrate`
+- `hello://v2/status`
+- `hello://v2/audit`
+- `hello://v2/metrics`
+- `hello.v2.orchestrate`
 
 ## Contributing
 

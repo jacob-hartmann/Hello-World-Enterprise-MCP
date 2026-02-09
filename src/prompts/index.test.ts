@@ -1,13 +1,13 @@
-/**
- * Tests for prompts registration
- */
-
-import { describe, it, expect, vi } from "vitest";
-import { registerPrompts } from "./index.js";
+import { describe, expect, it, vi } from "vitest";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  ORCHESTRATOR_PROMPT_NAME,
+  ORCHESTRATOR_TOOL_NAME,
+} from "../constants.js";
+import { registerPrompts } from "./index.js";
 
-describe("registerPrompts", () => {
-  it("should register hello.greet prompt", () => {
+describe("registerPrompts (v2)", () => {
+  it("registers only the v2 orchestrator prompt", () => {
     const prompts = new Map<
       string,
       (args: Record<string, unknown>) => unknown
@@ -25,10 +25,10 @@ describe("registerPrompts", () => {
     } as unknown as McpServer;
 
     registerPrompts(server);
-    expect(prompts.has("hello.greet")).toBe(true);
+    expect(Array.from(prompts.keys())).toEqual([ORCHESTRATOR_PROMPT_NAME]);
   });
 
-  it("hello.greet should return simple greeting instructions by default", () => {
+  it("returns workflow guidance containing the v2 tool name", () => {
     const prompts = new Map<
       string,
       (args: Record<string, unknown>) => unknown
@@ -46,70 +46,16 @@ describe("registerPrompts", () => {
     } as unknown as McpServer;
 
     registerPrompts(server);
-    const handler = prompts.get("hello.greet");
-    expect(handler).toBeDefined();
-
-    const result = handler!({});
-    expect(result).toHaveProperty("messages");
-    const response = result as {
-      messages: { role: string; content: { type: string; text: string } }[];
+    const payload = prompts.get(ORCHESTRATOR_PROMPT_NAME)?.({
+      recipient: "Universe",
+      formality: "formal",
+      locale: "en-US",
+    }) as {
+      messages: { content: { text: string } }[];
     };
-    expect(response.messages).toHaveLength(1);
-    expect(response.messages[0]?.content.text).toContain("hello.world");
-  });
 
-  it("hello.greet should return enterprise instructions when useEnterprise is true", () => {
-    const prompts = new Map<
-      string,
-      (args: Record<string, unknown>) => unknown
-    >();
-    const server = {
-      registerPrompt: vi.fn(
-        (
-          name: string,
-          _config: unknown,
-          handler: (args: Record<string, unknown>) => unknown
-        ) => {
-          prompts.set(name, handler);
-        }
-      ),
-    } as unknown as McpServer;
-
-    registerPrompts(server);
-    const handler = prompts.get("hello.greet");
-    const result = handler!({ useEnterprise: true });
-    const response = result as {
-      messages: { role: string; content: { type: string; text: string } }[];
-    };
-    expect(response.messages[0]?.content.text).toContain(
-      "hello.enterprise.greet"
-    );
-    expect(response.messages[0]?.content.text).toContain("formality");
-  });
-
-  it("hello.greet should use custom recipient", () => {
-    const prompts = new Map<
-      string,
-      (args: Record<string, unknown>) => unknown
-    >();
-    const server = {
-      registerPrompt: vi.fn(
-        (
-          name: string,
-          _config: unknown,
-          handler: (args: Record<string, unknown>) => unknown
-        ) => {
-          prompts.set(name, handler);
-        }
-      ),
-    } as unknown as McpServer;
-
-    registerPrompts(server);
-    const handler = prompts.get("hello.greet");
-    const result = handler!({ recipient: "Universe", useEnterprise: true });
-    const response = result as {
-      messages: { role: string; content: { type: string; text: string } }[];
-    };
-    expect(response.messages[0]?.content.text).toContain("Universe");
+    expect(payload.messages[0]?.content.text).toContain(ORCHESTRATOR_TOOL_NAME);
+    expect(payload.messages[0]?.content.text).toContain("strict-default");
+    expect(payload.messages[0]?.content.text).toContain("Universe");
   });
 });
