@@ -1,5 +1,5 @@
-import { createRequire } from "node:module";
 import { SQLITE_DB_PATH } from "../constants.js";
+import { packageJson } from "../package-info.js";
 import {
   CasualGreetingStrategy,
   FormalGreetingStrategy,
@@ -33,13 +33,6 @@ import { GreetingOrchestrator } from "./orchestrator.js";
 import { OperationsService } from "./operations-service.js";
 import { ProjectionReplayService } from "./projection-replay-service.js";
 import { SagaEngine } from "./saga-engine.js";
-
-const require = createRequire(import.meta.url);
-const packageJson = require("../../package.json") as {
-  version: string;
-  name: string;
-  description: string;
-};
 
 const TOKENS = {
   eventBus: createToken<EventBus>("event-bus"),
