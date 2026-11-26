@@ -50,23 +50,30 @@
   },
   "packageManager": "pnpm@10.28.2",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.26.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "cross-env": "^10.1.0",
-    "dotenv": "^17.2.3",
-    "zod": "4.3.6"
+    "dotenv": "^17.4.2",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.2",
-    "@modelcontextprotocol/inspector": "0.19.0",
-    "@types/node": "25.2.2",
-    "@vitest/coverage-v8": "4.0.18",
-    "eslint": "9.39.2",
+    "@eslint/js": "9.39.5",
+    "@modelcontextprotocol/inspector": "0.22.0",
+    "@types/node": "25.9.12",
+    "@vitest/coverage-v8": "4.1.12",
+    "eslint": "9.39.5",
     "eslint-config-prettier": "10.1.8",
-    "prettier": "3.8.1",
+    "prettier": "3.10.1",
     "tsup": "8.5.1",
-    "tsx": "4.21.0",
+    "tsx": "4.23.15",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.54.0",
-    "vitest": "4.0.18"
+    "typescript-eslint": "8.74.0",
+    "vitest": "4.1.12"
+  },
+  "pnpm": {
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-mrhx-c7xc-m3w5"
+      ]
+    }
   }
 }
