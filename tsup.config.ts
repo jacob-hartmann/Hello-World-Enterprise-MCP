@@ -10,4 +10,7 @@ export default defineConfig({
   sourcemap: true,
   splitting: false,
   shims: false,
+  // Keep `node:` specifiers intact: `node:sqlite` has no un-prefixed alias, so
+  // stripping the prefix produces `import "sqlite"`, which fails at startup.
+  removeNodeProtocol: false,
 });
