@@ -25,3 +25,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: "Dependency Review"
         uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v5.0.1
+        with:
+          # GHSA-g7r4-m6w7-qqqr (low): esbuild's dev server on Windows. esbuild
+          # is a dev-only dependency of tsup 8.x, which pins esbuild ^0.27 and
+          # only uses the build API, never `esbuild serve`. The fix (0.28.1+)
+          # needs tsup 9. Remove this entry when moving to tsup 9.
+          allow-ghsas: GHSA-g7r4-m6w7-qqqr
