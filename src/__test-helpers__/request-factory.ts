@@ -38,6 +38,9 @@ export function createValidRequest(
     },
     chaos: {
       profile: "deterministic",
+      // Fixed seed: without it the chaos engine seeds from the random requestId,
+      // and roughly 1 in 23 step attempts injects a timeout, making tests flaky.
+      seed: "test-fixture-seed",
       partitionSimulation: false,
       latencyJitterMs: 0,
     },
